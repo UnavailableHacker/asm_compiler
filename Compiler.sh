@@ -1,70 +1,29 @@
 #!/bin/bash
-function build() {
-    set -x
-    nasm $ASMFLAGS -o asmcc.o start.asm || exit $?
-    ld -o asmcc asmcc.o || exit $?
-    { set +x; } 2> /dev/null # Disable logging
-}
-
-function run() {
-    set -x
-    ./asmcc examples/test.c
-}
-
-function run_with_debugger() {
-    set -x
-    gdb --args asmcc examples/test.c
-}
-
-function run_with_backtrace() {
-    set -x
-    nm asmcc -l > syms
-    { ./asmcc examples/test.c; exit $?; } | \
-        { tee log | sed -e '/fn>>/d'; } 2>/dev/null
-    { set +x; } 2> /dev/null # Disable logging
-
-    # Print out the backtrace if it is present
-    sed -e '/fn>>/ !d' -e 's/fn>> //' log | \
-        xargs -I pat -n1 grep pat syms
-}
-
-# defaults
-RUN=yes
-DEBUG=yes
-DEBUGGER=no
-BACKTRACE=yes
-ASMFLAGS="-w+all -f elf64"
-
-# Configuration
-export REVISION=$(git rev-parse --short HEAD)
-for ARG in $*; do
-    if [ "$ARG" = "--release" ]; then
-        ASMFLAGS="-w+all -f elf64"
-        RUN=no
-        DEBUG=no
-        BACKTRACE=no
-    fi
-    if [ "$ARG" = "--debug" ]; then
-        DEBUGGER=yes
-    fi
-done
-
-if [ $DEBUG = yes ]; then
-    ASMFLAGS="$ASMFLAGS -g -F stabs -O0"
-fi
-
-if [ $BACKTRACE = yes ]; then
-    ASMFLAGS="$ASMFLAGS -dBACKTRACE"
-fi
-
-# Debug Build & Run
-build
-if [ $RUN = yes ]; then
-    if [ $DEBUGGER = yes ]; then
-        run_with_debugger
-    elif [ $BACKTRACE = yes ]; then
-        run_with_backtrace
+n=$#
+if [n != 2]; then 
+    echo "Usage: compile.sh <input.asm> <output>"
+    exit
+else
+    echo "[+]Starting to compile"
+    echo "[+]Compiling using nasm"
+    input = $1
+    output = $2
+    inter = "asm000.o"
+    nasm -f elf -o $inter $input
+    ret = $?
+    if [ $ret != 0 ]; then
+        echo "[+]Nasm Compilation Error"
+        exit
     else
-        run
+        echo "[+]Compiling using gcc"
+        gcc -o $output $inter 
+        ret = $?
+        if [ $ret != 0 ]; then
+            echo "gcc Compilation Error"
+            exit
+        else
+            rm $inter
+            echo "[+]Done"
+        fi
     fi
 fi
